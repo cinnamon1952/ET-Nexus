@@ -4,11 +4,20 @@ FastAPI Backend with mock data and simulated AI endpoints.
 """
 
 import asyncio
+import json
+import os
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from groq import Groq
 from pydantic import BaseModel
 from typing import Optional
+
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # ─────────────────────────────────────────────
 # App Setup
@@ -61,8 +70,8 @@ MOCK_ARTICLES = {
     "1": {
         "id": "1",
         "title": "Financial Contagion: How One Bank's Collapse Triggered a Global Sell-Off",
-        "summary": "A deep dive into the cascading failures that spread from a single mid-tier European bank to markets in Asia, Latin America, and the US within 72 hours.",
-        "content": "In March 2026, Vereinigte Kreditbank AG — a mid-tier German lender with €48 billion in assets — disclosed a €6.2 billion hole in its commercial real-estate portfolio. Within 72 hours the shock had crossed three continents. Asian credit-default-swap spreads widened by 120 basis points, Brazil's Bovespa fell 8.4%, and the S&P 500 shed $1.7 trillion in market capitalisation. The episode became a textbook case of financial contagion: the mechanism by which distress in one node of the global financial network propagates to seemingly unrelated nodes through interbank lending, derivatives exposures, and — crucially — investor psychology. Researchers at the Bank for International Settlements later mapped the transmission channels and found that algorithmic trading strategies amplified the initial shock by roughly 40%, as momentum-based systems piled into the same exit trades. The event reignited debate over Basel IV capital buffers and whether regulators need real-time network-topology monitoring to detect contagion risk before it becomes systemic.",
+        "summary": "A deep dive into cascading failures spreading from a single bank to global markets.",
+        "content": "A mid-tier European lender disclosed large real-estate losses, triggering rapid cross-market contagion. CDS spreads widened, equity indices fell, and algorithmic momentum exits amplified volatility.",
         "author": "Priya Mehta",
         "date": "2026-03-10",
         "category": "Markets",
@@ -74,8 +83,8 @@ MOCK_ARTICLES = {
     "2": {
         "id": "2",
         "title": "Deep Learning Models Now Predict Earnings Surprises with 78% Accuracy",
-        "summary": "A new transformer-based model trained on 10-K filings, earnings call transcripts, and satellite imagery is outperforming Wall Street consensus estimates.",
-        "content": "QuantLens AI, a New York–based hedge-fund spin-off, published a peer-reviewed paper demonstrating that its proprietary transformer model can predict quarterly earnings surprises with 78% directional accuracy — roughly 15 percentage points above the best sell-side consensus. The model ingests three heterogeneous data streams: the full text of 10-K and 10-Q SEC filings (parsed with a legal-domain fine-tuned LLM), earnings-call audio converted to sentiment-annotated transcripts, and commercial satellite imagery of retail foot traffic and factory output. A cross-attention mechanism fuses these modalities into a unified embedding space. Back-tested over 2018-2025, a long-short portfolio constructed from the model's top and bottom decile predictions returned 23.4% annualised alpha net of transaction costs. The work raises profound questions about market efficiency: if machines can systematically extract edge from public data, does the Efficient Market Hypothesis need a version 2.0?",
+        "summary": "Transformer models are outperforming consensus earnings forecasts.",
+        "content": "A model combining SEC filings, transcript sentiment, and satellite data reported strong directional accuracy on earnings surprises and generated backtested alpha.",
         "author": "James O'Sullivan",
         "date": "2026-03-12",
         "category": "AI & Finance",
@@ -87,8 +96,8 @@ MOCK_ARTICLES = {
     "3": {
         "id": "3",
         "title": "Algorithmic Trading Firms Face New SEC Scrutiny Over Flash-Crash Prevention",
-        "summary": "The SEC proposes mandatory 'kill switch' rules for high-frequency trading systems after last month's 12-minute Nasdaq anomaly.",
-        "content": "Following a 12-minute anomaly on March 3 in which Nasdaq-100 futures plunged 4.1% before snapping back, the US Securities and Exchange Commission has proposed Rule 15c3-7 — colloquially dubbed the 'Kill Switch Rule'. The proposed regulation would require every broker-dealer operating algorithmic or high-frequency trading systems to implement automated circuit-breakers that halt all outbound orders when predefined volatility or position-size thresholds are breached. The rule also mandates real-time reporting of algorithmic strategy parameters to a new SEC Office of Algorithmic Oversight. Industry reaction is split: Citadel Securities and Jane Street have expressed cautious support, arguing that standardised guardrails level the playing field, while smaller prop-trading firms warn the compliance burden could force consolidation. Academic studies estimate that HFT firms account for roughly 55% of US equity volume, making the stakes enormous for market liquidity.",
+        "summary": "The SEC proposes mandatory kill-switch controls for HFT systems.",
+        "content": "Following a sharp futures anomaly and rebound, the SEC proposed guardrails for algorithmic trading, including mandatory circuit-breakers and tighter oversight.",
         "author": "David Chen",
         "date": "2026-03-15",
         "category": "Regulation",
@@ -100,8 +109,8 @@ MOCK_ARTICLES = {
     "4": {
         "id": "4",
         "title": "India's UPI Processes 20 Billion Transactions in February — A Fintech Milestone",
-        "summary": "India's Unified Payments Interface sets a new monthly record, cementing the country's position as the world's largest real-time payments market.",
-        "content": "India's Unified Payments Interface processed 20.07 billion transactions worth ₹18.3 lakh crore (approximately $218 billion) in February 2026, according to data from the National Payments Corporation of India. The milestone — up 34% year-on-year — cements India's dominance in real-time digital payments, processing more volume than the combined totals of the US FedNow, EU TIPS, and Brazil PIX systems. Analysts attribute the surge to three factors: the rollout of UPI Lite X (offline NFC payments), credit-line-on-UPI expansion by 14 major banks, and the integration of UPI with Singapore's PayNow and Japan's Zengin for cross-border remittances. For fintech founders, the data signals that India's payments infrastructure is now mature enough to support value-added layers — embedded lending, merchant analytics, and AI-driven fraud detection — creating a $40 billion addressable opportunity by 2028.",
+        "summary": "UPI sets a record and strengthens India's lead in real-time payments.",
+        "content": "Record UPI transaction volume highlights mature digital payments rails and opens opportunities in lending, analytics, and fraud detection layers.",
         "author": "Ananya Kapoor",
         "date": "2026-03-08",
         "category": "Fintech",
@@ -113,8 +122,8 @@ MOCK_ARTICLES = {
     "5": {
         "id": "5",
         "title": "The Rise of Synthetic Data in Quantitative Finance",
-        "summary": "Major hedge funds are now generating synthetic market data using GANs and diffusion models to stress-test strategies against scenarios that have never occurred.",
-        "content": "Two Sigma, DE Shaw, and at least four other systematic hedge funds have begun using generative adversarial networks (GANs) and denoising diffusion probabilistic models to produce synthetic market-data sets, according to sources familiar with the matter. The synthetic data — realistic tick-by-tick price series, order-book snapshots, and macroeconomic indicator streams — allows quant teams to stress-test trading strategies against plausible but historically unprecedented scenarios: a simultaneous sovereign-debt crisis in three G7 nations, a 90% single-day drop in a mega-cap stock, or a sustained period of negative oil prices. The technique addresses a fundamental limitation of backtesting: history provides only one sample path. By generating thousands of alternative paths that respect the statistical properties (fat tails, volatility clustering, cross-asset correlations) of real data, funds can estimate tail-risk exposure far more robustly. Regulators are watching closely, however, as model-generated 'fantasy data' could also be used to overfit strategies that appear safe on paper.",
+        "summary": "Funds are using synthetic market paths to stress-test strategies.",
+        "content": "Quant firms are applying GANs and diffusion models to generate realistic synthetic data for tail-risk scenario testing and robustness analysis.",
         "author": "Lena Fischer",
         "date": "2026-03-18",
         "category": "AI & Finance",
@@ -126,8 +135,8 @@ MOCK_ARTICLES = {
     "6": {
         "id": "6",
         "title": "Venture Capital Funding Rebounds: Q1 2026 Sees $78B in Global Deals",
-        "summary": "After two years of contraction, venture capital is flowing again — led by AI infrastructure, climate tech, and defence-tech startups.",
-        "content": "Global venture-capital investment totalled $78.3 billion across 4,210 deals in Q1 2026, marking a 41% increase over Q1 2025 and the strongest opening quarter since the 2021 bubble, according to PitchBook data. AI-infrastructure startups captured the lion's share ($28.1 billion), with mega-rounds of $500 million-plus becoming routine for companies building foundational-model training clusters, inference-optimisation chips, and enterprise AI orchestration platforms. Climate tech ranked second at $14.6 billion, driven by green-hydrogen electrolysers and next-generation battery chemistries. Defence tech — dual-use autonomy, satellite communications, and cybersecurity — emerged as a surprise third, pulling in $9.2 billion, triple its year-ago figure. For founders, the message is nuanced: while capital is abundant, investors are demanding clearer paths to profitability and are attaching more stringent governance provisions, including AI-safety audit clauses in term sheets.",
+        "summary": "VC activity rebounds with AI infrastructure and climate tech leading.",
+        "content": "Global VC funding rose strongly year-over-year, with larger rounds in AI infrastructure and stricter governance terms in new deals.",
         "author": "Marcus Williams",
         "date": "2026-03-20",
         "category": "Venture Capital",
@@ -139,8 +148,8 @@ MOCK_ARTICLES = {
     "7": {
         "id": "7",
         "title": "Central Banks Explore AI-Driven Monetary Policy Simulations",
-        "summary": "The Bank of England and the Reserve Bank of India are piloting agent-based models powered by LLMs to simulate the effects of rate decisions before they are made.",
-        "content": "At least five central banks — including the Bank of England, Reserve Bank of India, European Central Bank, Bank of Japan, and the Federal Reserve — are piloting agent-based macroeconomic simulations powered by large language models, according to a confidential BIS working paper obtained by ET Nexus. The simulations populate a virtual economy with millions of LLM-driven 'agents' — households, firms, banks, and government entities — each capable of reading and reacting to simulated news, policy announcements, and market data in natural language. When the Bank of England fed its model a hypothetical 50-basis-point rate cut paired with forward guidance of 'lower for longer', the simulation predicted a 2.3% increase in household spending, a 1.1% rise in residential property prices, and a 15-basis-point steepening of the gilt yield curve within six months — results that closely matched the observed effects of the BOE's 2024 easing cycle. Critics caution that LLM agents may inherit biases from training data and could give policymakers false confidence in model predictions.",
+        "summary": "Central banks pilot LLM-based agent simulations for policy testing.",
+        "content": "Multiple central banks are evaluating agent-based simulations to estimate policy impacts, with debate about model bias and robustness.",
         "author": "Ravi Shankar",
         "date": "2026-03-22",
         "category": "Macro",
@@ -152,8 +161,8 @@ MOCK_ARTICLES = {
     "8": {
         "id": "8",
         "title": "How a 22-Year-Old Built a $50M ARR Fintech from a College Dorm",
-        "summary": "The story of PayLoop — a B2B invoicing platform that used AI agents to automate accounts receivable and reached $50M ARR in 18 months.",
-        "content": "When Aisha Patel started PayLoop from her Stanford dorm room in September 2024, she had no venture backing, no co-founder, and no enterprise sales experience. Eighteen months later, the B2B invoicing platform has crossed $50 million in annual recurring revenue, employs 120 people across Palo Alto and Bengaluru, and counts 4,200 SMBs as paying customers. The secret, Patel says, is 'AI-native architecture from day one'. PayLoop deploys autonomous AI agents that handle the entire accounts-receivable lifecycle: generating invoices from natural-language descriptions of deliverables, chasing overdue payments via personalised email and WhatsApp sequences, negotiating payment plans within pre-approved parameters, and automatically reconciling incoming payments with open invoices. The system reduces days-sales-outstanding by an average of 14 days for customers. Patel closed a $120 million Series B led by Sequoia Capital last week at a $1.2 billion valuation, making PayLoop the fastest Indian-origin SaaS company to reach unicorn status.",
+        "summary": "An AI-native invoicing startup reaches rapid scale and unicorn valuation.",
+        "content": "The company automated accounts receivable with AI agents and scaled quickly through product-led efficiency and strong SMB adoption.",
         "author": "Vikram Rao",
         "date": "2026-03-24",
         "category": "Startups",
@@ -164,149 +173,148 @@ MOCK_ARTICLES = {
     },
 }
 
-# ─────────────────────────────────────────────
-# AI Simulation Helpers
-# TODO: Replace these stubs with real OpenAI / Gemini API calls.
-#       Each function is isolated so you can swap in your API key
-#       and client with minimal refactoring.
-# ─────────────────────────────────────────────
 
-async def generate_briefing(article: dict) -> dict:
-    """
-    Simulate an LLM generating bullet-point summary + sentiment analysis.
-    TODO: Replace with real LLM call (e.g., openai.ChatCompletion.create).
-    """
-    await asyncio.sleep(1.0)  # Simulated latency
+def _extract_json_object(raw_text: str) -> dict:
+    """Extract a JSON object from model output, even if wrapped in markdown fences."""
+    if not raw_text:
+        raise ValueError("Empty model response")
 
-    # Pre-built briefings keyed by article ID for richer demo
-    briefings = {
-        "1": {
-            "bullets": [
-                "Vereinigte Kreditbank AG disclosed a €6.2B loss in commercial real-estate, triggering a 72-hour global sell-off.",
-                "Asian CDS spreads widened 120 bps; Brazil's Bovespa fell 8.4%; S&P 500 lost $1.7T in market cap.",
-                "Algorithmic trading amplified the shock by ~40% via momentum-based exit cascades.",
-                "BIS researchers mapped transmission through interbank lending, derivatives, and investor psychology.",
-                "Reignited debate over Basel IV capital buffers and real-time network-topology monitoring.",
-            ],
-            "sentiment": "negative",
-            "confidence": 0.92,
-        },
-        "2": {
-            "bullets": [
-                "QuantLens AI's transformer model predicts earnings surprises with 78% directional accuracy.",
-                "Model fuses 10-K filings, earnings-call audio sentiment, and satellite imagery via cross-attention.",
-                "Back-tested long-short portfolio returned 23.4% annualised alpha (net of costs) over 2018-2025.",
-                "Raises fundamental questions about the Efficient Market Hypothesis.",
-                "Published as a peer-reviewed paper — first of its kind from a hedge-fund spin-off.",
-            ],
-            "sentiment": "positive",
-            "confidence": 0.88,
-        },
-        "3": {
-            "bullets": [
-                "SEC proposes Rule 15c3-7 ('Kill Switch Rule') after a 12-min Nasdaq-100 flash anomaly.",
-                "Would require automated circuit-breakers for all algorithmic / HFT trading systems.",
-                "Mandates real-time reporting of algo strategy parameters to new SEC oversight office.",
-                "Large firms (Citadel, Jane Street) cautiously supportive; smaller firms warn of consolidation risk.",
-                "HFT accounts for ~55% of US equity volume — stakes for market liquidity are enormous.",
-            ],
-            "sentiment": "neutral",
-            "confidence": 0.85,
-        },
-    }
+    text = raw_text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if len(lines) >= 3:
+            text = "\n".join(lines[1:-1]).strip()
 
-    if article["id"] in briefings:
-        return briefings[article["id"]]
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("No JSON object found")
 
-    # Fallback generic briefing for articles without a pre-built one
+    return json.loads(text[start:end + 1])
+
+
+def _default_briefing(article: dict) -> dict:
     return {
         "bullets": [
-            f"This article covers key developments in {article['category']}.",
-            f"Primary topics include: {', '.join(article['tags'][:3])}.",
-            f"The author {article['author']} provides analysis of recent market trends.",
-            "Multiple data points and expert opinions are cited throughout.",
-            "The piece concludes with forward-looking implications for stakeholders.",
+            article.get("summary", "Key developments are covered in this article."),
+            f"Category focus: {article.get('category', 'General')}.",
+            f"Top themes: {', '.join(article.get('tags', [])[:3]) or 'business, markets, analysis'}.",
+            "The story includes market impact, stakeholder implications, and forward-looking signals.",
         ],
         "sentiment": article.get("sentiment", "neutral"),
-        "confidence": 0.80,
+        "confidence_score": 70,
     }
+
+
+def _default_chat_response(article: dict, question: str) -> dict:
+    context_title = article.get("title", "the selected article")
+    return {
+        "response": (
+            f"Based on \"{context_title}\", a concise takeaway is: "
+            f"{article.get('summary', 'the article highlights key business developments and their implications')}. "
+            f"Your question was: \"{question}\"."
+        ),
+        "sources": [context_title],
+    }
+
+
+async def generate_briefing(article: dict) -> dict:
+    """Generate article briefing with Groq and a strict JSON output contract."""
+    if not groq_client:
+        return _default_briefing(article)
+
+    system_prompt = (
+        "You are a business news analyst. "
+        "Return ONLY raw JSON with this exact schema and no extra keys: "
+        "{\"bullets\": [string], \"sentiment\": \"positive|negative|neutral\", \"confidence_score\": integer}. "
+        "Rules: bullets must be 4-6 concise factual points. confidence_score must be 0-100 integer. "
+        "No markdown fences. No additional text."
+    )
+    user_prompt = (
+        f"Article title: {article.get('title', '')}\n"
+        f"Article summary: {article.get('summary', '')}\n"
+        f"Article content:\n{article.get('content', '')}"
+    )
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        content = completion.choices[0].message.content or ""
+        parsed = _extract_json_object(content)
+
+        bullets = parsed.get("bullets", [])
+        if not isinstance(bullets, list):
+            raise ValueError("Invalid bullets format")
+        bullets = [str(b).strip() for b in bullets if str(b).strip()]
+        if not bullets:
+            raise ValueError("No bullets returned")
+
+        sentiment = str(parsed.get("sentiment", "neutral")).lower()
+        if sentiment not in {"positive", "negative", "neutral"}:
+            sentiment = "neutral"
+
+        confidence_score = int(parsed.get("confidence_score", 70))
+        confidence_score = max(0, min(100, confidence_score))
+
+        return {
+            "bullets": bullets,
+            "sentiment": sentiment,
+            "confidence_score": confidence_score,
+        }
+    except Exception:
+        return _default_briefing(article)
 
 
 async def generate_chat_response(question: str, context_id: str) -> dict:
-    """
-    Simulate an LLM responding to a user question in the context of an article.
-    TODO: Replace with real LLM call.
-    """
-    await asyncio.sleep(1.5)  # Simulated latency
-
+    """Answer a user question grounded strictly in the selected article text."""
     article = MOCK_ARTICLES.get(context_id)
-    context_title = article["title"] if article else "the selected article"
+    if not article:
+        return {
+            "response": "I could not find context for this article. Please open the article again and retry.",
+            "sources": ["unknown"],
+        }
 
-    # Simple keyword-based mock responses for demo variety
-    q_lower = question.lower()
+    if not groq_client:
+        return _default_chat_response(article, question)
 
-    if any(word in q_lower for word in ["contagion", "spread", "cascade", "systemic"]):
+    context_title = article["title"]
+    system_prompt = (
+        "You are a financial news assistant. "
+        "Answer the user question using strictly and only the provided article text. "
+        "If the answer is not explicitly supported by the text, say that the article does not provide that detail. "
+        "Keep the answer concise and factual."
+    )
+    user_prompt = (
+        f"Article title: {context_title}\n"
+        f"Article text:\n{article.get('content', '')}\n\n"
+        f"User question: {question}"
+    )
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        response_text = (completion.choices[0].message.content or "").strip()
+        if not response_text:
+            raise ValueError("Empty chat completion")
+
         return {
-            "response": (
-                "Financial contagion refers to the spread of economic shocks from one market, "
-                "institution, or region to others. In the context of this article, the mechanism "
-                "operated through three channels: (1) direct interbank lending exposures, (2) shared "
-                "derivatives positions that created hidden correlations, and (3) behavioural herding "
-                "amplified by algorithmic trading systems. The key insight is that modern financial "
-                "networks are so interconnected that a single node failure can cascade systemically "
-                "within hours, not days."
-            ),
+            "response": response_text,
             "sources": [context_title],
         }
-    elif any(word in q_lower for word in ["algorithm", "algo", "hft", "trading"]):
-        return {
-            "response": (
-                "Algorithmic trading systems, particularly high-frequency trading (HFT) strategies, "
-                "now account for approximately 55% of US equity trading volume. These systems operate "
-                "on microsecond timescales and use statistical patterns, order-flow signals, and "
-                "momentum indicators to execute trades. The concern highlighted in this article is "
-                "that during periods of stress, many algorithms converge on the same exit signals, "
-                "creating a liquidity vacuum that amplifies price dislocations."
-            ),
-            "sources": [context_title],
-        }
-    elif any(word in q_lower for word in ["deep learning", "ai", "model", "predict", "ml"]):
-        return {
-            "response": (
-                "The application of deep learning to financial markets represents a paradigm shift. "
-                "Modern transformer-based architectures can process multiple data modalities — text, "
-                "audio, imagery — simultaneously through cross-attention mechanisms. The 78% accuracy "
-                "in predicting earnings surprises suggests these models are capturing signals that "
-                "traditional fundamental analysis misses. However, it's important to note that past "
-                "performance in backtests doesn't guarantee future results, and overfitting remains "
-                "a significant concern in quantitative finance."
-            ),
-            "sources": [context_title],
-        }
-    elif any(word in q_lower for word in ["invest", "portfolio", "risk", "return"]):
-        return {
-            "response": (
-                "From an investment perspective, the key takeaway is the importance of understanding "
-                "tail risks and correlation dynamics. Traditional portfolio theory assumes stable "
-                "correlations, but during stress events, correlations tend to spike toward 1.0 — "
-                "meaning diversification fails precisely when you need it most. Strategies to mitigate "
-                "this include: dynamic hedging, tail-risk parity approaches, and maintaining adequate "
-                "cash buffers to avoid forced selling during drawdowns."
-            ),
-            "sources": [context_title],
-        }
-    else:
-        return {
-            "response": (
-                f"That's a great question in the context of \"{context_title}\". "
-                "Based on the article's analysis, several factors are at play here. The intersection "
-                "of technology, regulation, and market microstructure is creating new dynamics that "
-                "traditional frameworks struggle to capture. I'd recommend looking at this through "
-                "the lens of network theory and behavioural finance — both offer complementary "
-                "insights into why modern markets behave the way they do."
-            ),
-            "sources": [context_title],
-        }
+    except Exception:
+        return _default_chat_response(article, question)
 
 
 async def generate_translation(text: str, target_language: str) -> dict:
@@ -416,16 +424,29 @@ async def get_briefing(request: BriefingRequest):
         )
 
     briefing = await generate_briefing(article)
+    confidence_score = int(briefing.get("confidence_score", 70))
+    confidence_score = max(0, min(100, confidence_score))
     return {
         "article_id": request.article_id,
         "article_title": article["title"],
-        **briefing,
+        "bullets": briefing.get("bullets", []),
+        "sentiment": briefing.get("sentiment", "neutral"),
+        "confidence_score": confidence_score,
+        # Keep legacy numeric contract expected by frontend api.ts.
+        "confidence": round(confidence_score / 100, 2),
     }
 
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     """Respond to a user question in the context of an article."""
+    article = MOCK_ARTICLES.get(request.context_id)
+    if not article:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Article '{request.context_id}' not found.",
+        )
+
     result = await generate_chat_response(request.question, request.context_id)
     return {
         "question": request.question,
