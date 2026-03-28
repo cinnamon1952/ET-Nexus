@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Sparkles,
   BarChart3,
-  AlertCircle,
 } from "lucide-react";
 
 export default function VideoStudioPage() {
@@ -29,10 +28,22 @@ export default function VideoStudioPage() {
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    setFeedLoading(true);
-    fetchFeed(persona)
-      .then((data) => { setArticles(data.articles); setFeedLoading(false); })
-      .catch(() => setFeedLoading(false));
+    let cancelled = false;
+
+    async function loadFeed() {
+      setFeedLoading(true);
+      try {
+        const data = await fetchFeed(persona);
+        if (!cancelled) setArticles(data.articles);
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    }
+
+    void loadFeed();
+    return () => {
+      cancelled = true;
+    };
   }, [persona]);
 
   // Auto-advance scenes when playing
@@ -113,17 +124,30 @@ export default function VideoStudioPage() {
                 <button
                   key={a.id}
                   onClick={() => handleGenerate(a.id)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all duration-200 cursor-pointer ${
+                  className={`w-full overflow-hidden text-left rounded-xl border transition-all duration-200 cursor-pointer ${
                     selectedId === a.id
                       ? "border-[var(--color-accent-secondary)] bg-[var(--color-accent-secondary)]/10"
                       : "border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-accent-secondary)]/30"
                   }`}
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-1">
-                    {a.category}
-                  </p>
-                  <p className="text-sm font-bold leading-snug line-clamp-2">{a.title}</p>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-1">{a.author} • {a.date}</p>
+                  {a.image_url && (
+                    <div className="h-28 border-b border-[var(--color-border)]">
+                      <img
+                        src={a.image_url}
+                        alt={a.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                  <div className="p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-1">
+                      {a.category}
+                    </p>
+                    <p className="text-sm font-bold leading-snug line-clamp-2">{a.title}</p>
+                    <p className="text-[11px] text-[var(--color-muted)] mt-1">{a.author} • {a.date}</p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -153,7 +177,19 @@ export default function VideoStudioPage() {
           {video && !loading && (
             <div className="space-y-4 animate-fade-in-up">
               {/* Video Player Mock */}
-              <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 border border-[var(--color-border)] aspect-video">
+              <div className="relative rounded-2xl overflow-hidden border border-[var(--color-border)] aspect-video">
+                {video.scenes[activeScene]?.image_url ? (
+                  <img
+                    src={video.scenes[activeScene]?.image_url}
+                    alt={video.title}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
                 {/* Scene Visual */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
                   <div
@@ -169,8 +205,8 @@ export default function VideoStudioPage() {
                   <p className="text-lg font-bold max-w-md leading-relaxed mb-4">
                     {video.scenes[activeScene]?.narration}
                   </p>
-                  <p className="text-xs text-[var(--color-muted)] max-w-sm">
-                    🎬 {video.scenes[activeScene]?.visual}
+                  <p className="text-xs text-white/70 max-w-sm">
+                    {video.scenes[activeScene]?.visual}
                   </p>
                 </div>
 
@@ -243,6 +279,17 @@ export default function VideoStudioPage() {
                         : "border-[var(--color-border)] bg-[var(--color-card)] hover:bg-[var(--color-surface)]"
                     }`}
                   >
+                    {scene.image_url ? (
+                      <img
+                        src={scene.image_url}
+                        alt={scene.type}
+                        className="h-12 w-16 rounded-lg object-cover border border-[var(--color-border)]"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-12 w-16 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]" />
+                    )}
                     <span className="text-xs font-mono text-[var(--color-muted)] w-8">{scene.timestamp}</span>
                     <span
                       className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded"

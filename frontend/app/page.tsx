@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAppContext } from "@/lib/context";
-import { fetchFeed, Article } from "@/lib/api";
+import { fetchFeed, Article, translateTexts } from "@/lib/api";
 import NewsCard from "@/components/NewsCard";
 import StoryArc from "@/components/StoryArc";
 import {
@@ -41,27 +41,76 @@ const personaMeta = {
 };
 
 export default function Dashboard() {
-  const { persona } = useAppContext();
+  const { persona, language } = useAppContext();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [translatedArticles, setTranslatedArticles] = useState<{ language: string; articles: Article[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [translatingFeed, setTranslatingFeed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetchFeed(persona)
-      .then((data) => {
+    let cancelled = false;
+
+    async function loadFeed() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchFeed(persona);
+        if (cancelled) return;
         setArticles(data.articles);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Unknown feed error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadFeed();
+    return () => {
+      cancelled = true;
+    };
   }, [persona]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTranslatedFeed() {
+      if (language === "English" || articles.length === 0) {
+        setTranslatedArticles(null);
+        setTranslatingFeed(false);
+        return;
+      }
+
+      setTranslatedArticles(null);
+      setTranslatingFeed(true);
+      try {
+        const payload = articles.flatMap((article) => [article.title, article.summary]);
+        const res = await translateTexts(payload, language);
+        if (cancelled) return;
+
+        const nextArticles = articles.map((article, index) => ({
+          ...article,
+          title: res.translations[index * 2]?.translated || article.title,
+          summary: res.translations[index * 2 + 1]?.translated || article.summary,
+        }));
+        setTranslatedArticles({ language, articles: nextArticles });
+      } catch {
+        if (!cancelled) setTranslatedArticles(null);
+      } finally {
+        if (!cancelled) setTranslatingFeed(false);
+      }
+    }
+
+    void loadTranslatedFeed();
+    return () => {
+      cancelled = true;
+    };
+  }, [articles, language]);
 
   const meta = personaMeta[persona];
   const PersonaIcon = meta.icon;
+  const visibleArticles = translatedArticles?.language === language ? translatedArticles.articles : articles;
 
   return (
     <div className="space-y-10">
@@ -89,11 +138,11 @@ export default function Dashboard() {
           <div className="flex items-center gap-4 text-xs text-[var(--color-muted)]">
             <div className="flex items-center gap-1.5">
               <BarChart3 size={14} className="text-[var(--color-accent)]" />
-              <span className="font-mono">{articles.length} stories</span>
+              <span className="font-mono">{visibleArticles.length} stories</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Activity size={14} className="text-[var(--color-positive)]" />
-              <span className="font-mono">Live</span>
+              <span className="font-mono">{translatingFeed ? "Translating" : "Live"}</span>
             </div>
           </div>
         </div>
@@ -129,14 +178,14 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold">Today&apos;s Feed</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {articles.map((article, i) => (
+              {visibleArticles.map((article, i) => (
                 <NewsCard key={article.id} article={article} index={i} />
               ))}
             </div>
           </section>
 
           {/* Story Arc */}
-          <StoryArc />
+          <StoryArc articles={visibleArticles} persona={persona} />
         </>
       )}
     </div>

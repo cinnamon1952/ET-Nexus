@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   fetchArticle,
   fetchBriefing,
-  translateText,
+  translateTexts,
   generateVideo,
   Article,
   BriefingResponse,
@@ -36,15 +36,18 @@ import {
 export default function ArticlePage() {
   const params = useParams();
   const router = useRouter();
-  const { language } = useAppContext();
+  const { language, persona } = useAppContext();
   const articleId = params.id as string;
 
   const [article, setArticle] = useState<Article | null>(null);
   const [briefing, setBriefing] = useState<BriefingResponse | null>(null);
   const [loadingArticle, setLoadingArticle] = useState(true);
   const [loadingBriefing, setLoadingBriefing] = useState(true);
-  const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
+  const [translatedArticle, setTranslatedArticle] = useState<{ language: string; article: Article } | null>(null);
+  const [translatedContent, setTranslatedContent] = useState<{ language: string; content: string } | null>(null);
+  const [translatedBriefingBullets, setTranslatedBriefingBullets] = useState<{ language: string; bullets: string[] } | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [translatingContent, setTranslatingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Video state
@@ -55,46 +58,120 @@ export default function ArticlePage() {
 
   // Fetch article + briefing
   useEffect(() => {
-    setLoadingArticle(true);
-    setLoadingBriefing(true);
-    setError(null);
-    setTranslatedSummary(null);
+    let cancelled = false;
 
-    fetchArticle(articleId)
-      .then((data) => {
-        setArticle(data);
-        setLoadingArticle(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoadingArticle(false);
-      });
+    async function loadArticlePage() {
+      setLoadingArticle(true);
+      setLoadingBriefing(true);
+      setError(null);
+      setTranslatedArticle(null);
+      setTranslatedContent(null);
+      setTranslatedBriefingBullets(null);
 
-    fetchBriefing(articleId)
-      .then((data) => {
-        setBriefing(data);
-        setLoadingBriefing(false);
-      })
-      .catch(() => {
-        setLoadingBriefing(false);
-      });
+      try {
+        const [articleData, briefingData] = await Promise.allSettled([
+          fetchArticle(articleId),
+          fetchBriefing(articleId),
+        ]);
+
+        if (cancelled) return;
+
+        if (articleData.status === "fulfilled") {
+          setArticle(articleData.value);
+        } else {
+          setError(articleData.reason instanceof Error ? articleData.reason.message : "Article fetch failed");
+        }
+
+        if (briefingData.status === "fulfilled") {
+          setBriefing(briefingData.value);
+        } else {
+          setBriefing(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingArticle(false);
+          setLoadingBriefing(false);
+        }
+      }
+    }
+
+    void loadArticlePage();
+    return () => {
+      cancelled = true;
+    };
   }, [articleId]);
 
-  // Translate on language change (any non-English language)
+  // Translate article + briefing on language change
   useEffect(() => {
-    if (language !== "English" && briefing && briefing.bullets.length > 0) {
+    let cancelled = false;
+
+    async function loadTranslation() {
+      if (!article || language === "English") {
+        setTranslatedArticle(null);
+        setTranslatedContent(null);
+        setTranslatedBriefingBullets(null);
+        setTranslating(false);
+        setTranslatingContent(false);
+        return;
+      }
+
+      setTranslatedArticle(null);
+      setTranslatedContent(null);
+      setTranslatedBriefingBullets(null);
       setTranslating(true);
-      const combinedText = briefing.bullets.join(" | ");
-      translateText(combinedText, language)
-        .then((res) => {
-          setTranslatedSummary(res.translated);
-          setTranslating(false);
-        })
-        .catch(() => setTranslating(false));
-    } else {
-      setTranslatedSummary(null);
+      setTranslatingContent(true);
+      try {
+        const articleTexts = [
+          article.title,
+          article.summary,
+        ];
+        const briefingTexts = briefing?.bullets ?? [];
+        const res = await translateTexts([...articleTexts, ...briefingTexts], language);
+        if (cancelled) return;
+
+        const translations = res.translations.map((entry) => entry.translated);
+        setTranslatedArticle({
+          language,
+          article: {
+            ...article,
+            title: translations[0] || article.title,
+            summary: translations[1] || article.summary,
+          },
+        });
+        setTranslatedBriefingBullets({
+          language,
+          bullets: briefingTexts.length > 0
+            ? translations.slice(2, 2 + briefingTexts.length).map((bullet, index) => bullet || briefingTexts[index])
+            : [],
+        });
+      } catch {
+        if (!cancelled) {
+          setTranslatedArticle(null);
+          setTranslatedBriefingBullets(null);
+        }
+      } finally {
+        if (!cancelled) setTranslating(false);
+      }
+
+      try {
+        const contentRes = await translateTexts([article.content ?? ""], language);
+        if (cancelled) return;
+        setTranslatedContent({
+          language,
+          content: contentRes.translations[0]?.translated || article.content || "",
+        });
+      } catch {
+        if (!cancelled) setTranslatedContent(null);
+      } finally {
+        if (!cancelled) setTranslatingContent(false);
+      }
     }
-  }, [language, briefing]);
+
+    void loadTranslation();
+    return () => {
+      cancelled = true;
+    };
+  }, [article, briefing, language]);
 
   // Auto-advance video scenes
   useEffect(() => {
@@ -114,6 +191,8 @@ export default function ArticlePage() {
   async function handleVideoGen() {
     setVideoLoading(true);
     setVideo(null);
+    setActiveScene(0);
+    setVideoPlaying(false);
     try {
       const res = await generateVideo(articleId);
       setVideo(res);
@@ -145,6 +224,17 @@ export default function ArticlePage() {
     );
   }
 
+  const translatedArticleForLanguage = translatedArticle?.language === language ? translatedArticle.article : null;
+  const translatedContentForLanguage = translatedContent?.language === language ? translatedContent.content : null;
+  const visibleArticle = {
+    ...article,
+    ...(translatedArticleForLanguage ?? {}),
+    content: translatedContentForLanguage ?? article.content,
+  };
+  const visibleBriefingBullets = translatedBriefingBullets?.language === language
+    ? translatedBriefingBullets.bullets
+    : briefing?.bullets ?? [];
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in-up">
       {/* Back Button */}
@@ -166,13 +256,13 @@ export default function ArticlePage() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">
-          {article.title}
+          {visibleArticle.title}
         </h1>
 
         <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--color-muted)]">
           <span className="flex items-center gap-1.5">
             <User size={14} />
-            {article.author}
+            {visibleArticle.author}
           </span>
           <span className="flex items-center gap-1.5">
             <Clock size={14} />
@@ -184,13 +274,13 @@ export default function ArticlePage() {
           </span>
           <span className="flex items-center gap-1.5">
             <BookOpen size={14} />
-            {Math.ceil((article.content?.split(" ")?.length ?? 0) / 200)} min read
+            {Math.ceil((visibleArticle.content?.split(" ")?.length ?? 0) / 200)} min read
           </span>
         </div>
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">
-          {article.tags.map((tag) => (
+          {visibleArticle.tags.map((tag) => (
             <span
               key={tag}
               className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--color-surface)] rounded-lg text-xs text-[var(--color-muted)] font-mono border border-[var(--color-border)]"
@@ -200,6 +290,18 @@ export default function ArticlePage() {
             </span>
           ))}
         </div>
+
+        {visibleArticle.image_url && (
+          <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)]">
+            <img
+              src={visibleArticle.image_url}
+              alt={visibleArticle.title}
+              className="h-[260px] w-full object-cover"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
       </header>
 
       {/* AI Briefing */}
@@ -231,7 +333,7 @@ export default function ArticlePage() {
                     <Loader2 size={12} className="animate-spin" />
                     Translating to {language}...
                   </span>
-                ) : translatedSummary ? (
+                ) : translatedArticle?.language === language ? (
                   <span className="text-xs text-[var(--color-accent-secondary)]">
                     Culturally adapted {language} translation
                   </span>
@@ -239,27 +341,21 @@ export default function ArticlePage() {
               </div>
             )}
 
-            {language !== "English" && translatedSummary && !translating ? (
-              <div className="p-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]">
-                <p className="text-sm leading-relaxed">{translatedSummary}</p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {briefing.bullets.map((bullet, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-3 text-sm leading-relaxed animate-fade-in-up"
-                    style={{ animationDelay: `${i * 100}ms`, animationFillMode: "backwards" }}
-                  >
-                    <CheckCircle2
-                      size={16}
-                      className="flex-shrink-0 text-[var(--color-accent)] mt-0.5"
-                    />
-                    <span>{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="space-y-3">
+              {visibleBriefingBullets.map((bullet, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-3 text-sm leading-relaxed animate-fade-in-up"
+                  style={{ animationDelay: `${i * 100}ms`, animationFillMode: "backwards" }}
+                >
+                  <CheckCircle2
+                    size={16}
+                    className="flex-shrink-0 text-[var(--color-accent)] mt-0.5"
+                  />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
 
             {/* Sentiment analysis */}
             <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[var(--color-border-subtle)]">
@@ -284,7 +380,13 @@ export default function ArticlePage() {
           Full Article
         </h2>
         <div className="text-sm text-[var(--color-foreground)]/80 leading-[1.8] whitespace-pre-line">
-          {article.content}
+          {language !== "English" && translatingContent && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted)]">
+              <Loader2 size={12} className="animate-spin" />
+              Translating full article to {language}...
+            </div>
+          )}
+          {visibleArticle.content}
         </div>
       </section>
 
@@ -333,12 +435,28 @@ export default function ArticlePage() {
         {video && (
           <div className="space-y-3 animate-fade-in-up">
             {/* Mini player */}
-            <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 border border-[var(--color-border)] p-6 min-h-[120px] flex flex-col items-center justify-center text-center">
-              <p className="text-xs font-mono uppercase tracking-widest text-[var(--color-accent)]/60 mb-2">
+            <div className="relative rounded-xl overflow-hidden border border-[var(--color-border)] min-h-[220px]">
+              {video.scenes[activeScene]?.image_url ? (
+                <img
+                  src={video.scenes[activeScene]?.image_url}
+                  alt={video.title}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25" />
+              <div className="relative flex min-h-[220px] flex-col items-center justify-center p-6 text-center">
+              <p className="text-xs font-mono uppercase tracking-widest text-[var(--color-accent)]/80 mb-2">
                 {video.scenes[activeScene]?.type}
               </p>
-              <p className="text-sm font-semibold max-w-md leading-relaxed">
+              <p className="text-sm font-semibold max-w-md leading-relaxed text-white">
                 {video.scenes[activeScene]?.narration}
+              </p>
+              <p className="mt-3 text-[11px] text-white/70 max-w-md">
+                {video.scenes[activeScene]?.visual}
               </p>
               <div className="flex items-center gap-3 mt-4">
                 <button
@@ -362,6 +480,7 @@ export default function ArticlePage() {
                   {video.scenes[activeScene]?.timestamp} / 1:30
                 </span>
               </div>
+              </div>
             </div>
             <Link href="/video" className="flex items-center gap-1 text-xs text-[var(--color-accent-secondary)] hover:underline">
               Open full Video Studio <ChevronRight size={12} />
@@ -370,9 +489,26 @@ export default function ArticlePage() {
         )}
       </section>
 
+      <section className="rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base font-bold">Story Arc Tracker</h2>
+            <p className="text-sm text-[var(--color-muted)] mt-1">
+              Build a related-coverage timeline for this specific article instead of viewing a static global arc.
+            </p>
+          </div>
+          <Link
+            href={`/story-arc?articleId=${article.id}&persona=${persona}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-accent)]/20 bg-[var(--color-accent)]/5 px-4 py-2 text-xs font-semibold text-[var(--color-accent)] hover:opacity-80"
+          >
+            Open story arc <ChevronRight size={12} />
+          </Link>
+        </div>
+      </section>
+
       {/* Chat */}
       <section className="space-y-4">
-        <ChatInterface contextId={article.id} articleTitle={article.title} />
+        <ChatInterface contextId={article.id} articleTitle={visibleArticle.title} />
       </section>
     </div>
   );

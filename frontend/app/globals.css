@@ -16,8 +16,8 @@
   --color-neutral-badge: #f59e0b;
   --color-muted: #94a3b8;
   --color-card: rgba(30, 41, 59, 0.6);
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 /* ─── Base ─── */

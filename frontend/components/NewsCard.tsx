@@ -60,9 +60,23 @@ export default function NewsCard({ article, index }: Props) {
   return (
     <Link href={`/article/${article.id}`}>
       <div
-        className="card-glow group relative rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] p-5 cursor-pointer transition-all duration-300 hover:bg-[var(--color-surface)] hover:translate-y-[-2px] hover:shadow-xl hover:shadow-black/30 animate-fade-in-up"
+        className="card-glow group relative overflow-hidden rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] cursor-pointer transition-all duration-300 hover:bg-[var(--color-surface)] hover:translate-y-[-2px] hover:shadow-xl hover:shadow-black/30 animate-fade-in-up"
         style={{ animationDelay: `${index * 80}ms`, animationFillMode: "backwards" }}
       >
+        {article.image_url && (
+          <div className="relative h-44 overflow-hidden border-b border-[var(--color-border)]">
+            <img
+              src={article.image_url}
+              alt={article.title}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+          </div>
+        )}
+
+        <div className="p-5">
         {/* Category & Sentiment Row */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-accent)]">
@@ -112,6 +126,7 @@ export default function NewsCard({ article, index }: Props) {
             Read
             <ArrowRight size={12} />
           </span>
+        </div>
         </div>
       </div>
     </Link>

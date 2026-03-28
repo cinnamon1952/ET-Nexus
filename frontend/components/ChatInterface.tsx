@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { sendChat, ChatResponse } from "@/lib/api";
+import { sendChat } from "@/lib/api";
 import {
   MessageSquare,
   Send,

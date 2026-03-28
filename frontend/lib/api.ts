@@ -27,6 +27,7 @@ export interface FeedResponse {
   persona: string;
   count: number;
   articles: Article[];
+  last_ingested_at?: string | null;
 }
 
 export interface BriefingResponse {
@@ -52,12 +53,19 @@ export interface TranslateResponse {
   note: string;
 }
 
+export interface BatchTranslateResponse {
+  target_language: string;
+  count: number;
+  translations: TranslateResponse[];
+}
+
 export interface VideoScene {
   timestamp: string;
   type: string;
   narration: string;
   visual: string;
   duration: number;
+  image_url?: string;
 }
 
 export interface VideoResponse {
@@ -67,6 +75,9 @@ export interface VideoResponse {
   duration_seconds: number;
   format: string;
   resolution: string;
+  cover_image_url?: string;
+  source_url?: string;
+  script?: string;
   scenes: VideoScene[];
   ai_narration_voice: string;
   background_music: string;
@@ -125,8 +136,10 @@ export interface NavigatorResponse {
 
 // ─── API Functions ───
 
-export async function fetchFeed(persona: Persona): Promise<FeedResponse> {
-  const res = await fetch(`${API_BASE}/api/feed?persona=${persona}`);
+export async function fetchFeed(persona: Persona, refresh = false): Promise<FeedResponse> {
+  const params = new URLSearchParams({ persona });
+  if (refresh) params.set("refresh", "true");
+  const res = await fetch(`${API_BASE}/api/feed?${params.toString()}`);
   if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
   return res.json();
 }
@@ -167,6 +180,16 @@ export async function translateText(text: string, targetLanguage: string): Promi
   return res.json();
 }
 
+export async function translateTexts(texts: string[], targetLanguage: string): Promise<BatchTranslateResponse> {
+  const res = await fetch(`${API_BASE}/api/translate/batch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texts, target_language: targetLanguage }),
+  });
+  if (!res.ok) throw new Error(`Batch translation failed: ${res.status}`);
+  return res.json();
+}
+
 export async function generateVideo(articleId: string): Promise<VideoResponse> {
   const res = await fetch(`${API_BASE}/api/video`, {
     method: "POST",
@@ -177,14 +200,14 @@ export async function generateVideo(articleId: string): Promise<VideoResponse> {
   return res.json();
 }
 
-export async function fetchStoryArcs(): Promise<{ arcs: StoryArcSummary[] }> {
-  const res = await fetch(`${API_BASE}/api/story-arcs`);
+export async function fetchStoryArcs(persona: Persona): Promise<{ arcs: StoryArcSummary[] }> {
+  const res = await fetch(`${API_BASE}/api/story-arcs?persona=${persona}`);
   if (!res.ok) throw new Error(`Story arcs fetch failed: ${res.status}`);
   return res.json();
 }
 
-export async function fetchStoryArc(arcId: string): Promise<StoryArc> {
-  const res = await fetch(`${API_BASE}/api/story-arc/${arcId}`);
+export async function fetchStoryArc(arcId: string, persona: Persona): Promise<StoryArc> {
+  const res = await fetch(`${API_BASE}/api/story-arc/${arcId}?persona=${persona}`);
   if (!res.ok) throw new Error(`Story arc fetch failed: ${res.status}`);
   return res.json();
 }
