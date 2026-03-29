@@ -104,11 +104,14 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-Create `backend/.env`:
+Create `backend/.env` from `backend/.env.example`:
 
 ```env
 GROQ_API_KEY=your_key_here
 GROQ_MODEL=llama-3.1-8b-instant
+
+# Allowed frontend origins for local/dev or deployed frontend apps
+CORS_ORIGINS=http://localhost:3000
 
 # Optional tuning
 FEED_REFRESH_TTL_SECONDS=900
@@ -132,6 +135,14 @@ Backend URL:
 - `http://127.0.0.1:8000`
 
 ## Frontend
+
+Create `frontend/.env` from `frontend/.env.example`:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+Then run:
 
 ```bash
 cd frontend
@@ -177,12 +188,103 @@ Required:
 Optional:
 
 - `GROQ_MODEL`
+- `CORS_ORIGINS`
+- `FRONTEND_ORIGIN`
 - `FEED_REFRESH_TTL_SECONDS`
 - `MAX_FEED_ARTICLES`
 - `MAX_STORY_ARC_SUMMARIES`
 - `MAX_RELATED_ARTICLES`
 - `INGEST_WITH_GROQ`
 - `TRANSLATION_CONCURRENCY`
+- `NEXT_PUBLIC_API_BASE_URL` for the frontend
+
+## Deployment
+
+The easiest deployment setup for this repo is:
+
+- `frontend` -> `Vercel`
+- `backend` -> `Railway` or `Render`
+
+### Frontend Deployment
+
+Deploy the `frontend` directory as a separate project.
+
+Required frontend environment variable:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://your-backend-url.up.railway.app
+```
+
+Suggested Vercel settings:
+
+- Framework Preset: `Next.js`
+- Root Directory: `frontend`
+- Build Command: default
+- Output Directory: default
+
+### Backend Deployment
+
+Deploy the `backend` directory as a separate service.
+
+Required backend environment variables:
+
+```env
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=llama-3.1-8b-instant
+CORS_ORIGINS=https://your-frontend-url.vercel.app
+```
+
+Optional backend env vars:
+
+```env
+FEED_REFRESH_TTL_SECONDS=900
+MAX_FEED_ARTICLES=12
+MAX_STORY_ARC_SUMMARIES=6
+MAX_RELATED_ARTICLES=4
+INGEST_WITH_GROQ=false
+TRANSLATION_CONCURRENCY=2
+```
+
+Suggested Railway settings:
+
+- Root Directory: `backend`
+- Start Command:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Suggested Render settings:
+
+- Root Directory: `backend`
+- Build Command:
+
+```bash
+pip install -r requirements.txt
+```
+
+- Start Command:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+### Deployment Order
+
+1. Deploy the backend first.
+2. Copy the backend public URL.
+3. Set `NEXT_PUBLIC_API_BASE_URL` in the frontend deployment.
+4. Deploy the frontend.
+5. Set `CORS_ORIGINS` in the backend to the frontend production URL.
+6. Redeploy the backend if needed.
+
+### Production Notes
+
+- The backend stores articles and translation cache in memory only.
+- Restarting the backend clears the live corpus and translation cache.
+- First requests after a restart can be slower because ET ingestion runs again.
+- Free hosting platforms may cold start.
+- The video feature is still a storyboard API, not a rendered video file generator.
 
 ## Backend API
 

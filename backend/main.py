@@ -26,6 +26,15 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
+_cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+_frontend_origin_env = os.getenv("FRONTEND_ORIGIN", "").strip()
+if _cors_origins_env:
+    ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+elif _frontend_origin_env:
+    ALLOWED_ORIGINS = [_frontend_origin_env]
+else:
+    ALLOWED_ORIGINS = ["http://localhost:3000"]
+
 # ─────────────────────────────────────────────
 # App Setup
 # ─────────────────────────────────────────────
@@ -38,7 +47,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
